@@ -25,3 +25,5 @@ dist-ssr
 
 __pycache__/
 *.pyc
+chrome-win
+chrome_profile
