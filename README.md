@@ -8,10 +8,6 @@ This project is a **voice-first smart scheduling web app**:
 - The user clicks **Start Voice Conversation** in the frontend.
 - Audio is transcribed → parsed into a calendar command → Playwright automates Google Calendar to create the event.
 
-## What's New
-
-- **Bilingual support (Chinese/English)** across UI, logs, errors, and NLP parsing.
-
 ## Environment Setup
 
 ### Frontend
@@ -90,7 +86,19 @@ Backend/
 
 ## Key Features
 
-### 1. Frontend UI
+### 1. Frontend
+
+#### Bilingual support(Chinese/English)
+
+across UI, logs, errors, and NLP parsing
+
+#### Waiting Animation
+
+![image-20260127235511409](assets/image-20260127235511409.png)
+
+![image-20260127235406224](assets/image-20260127235406224.png)
+
+![image-20260127235446020](assets/image-20260127235446020.png)
 
 ### 2. Voice Interaction Flow
 
