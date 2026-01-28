@@ -4,14 +4,14 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.scss'
 import 'antd/dist/reset.css';
 import App from './App.jsx'
-import dayjs from 'dayjs';
-import 'dayjs/locale/zh-cn';
-dayjs.locale('zh-cn');
+import { LanguageProvider } from "./i18n/LanguageContext.jsx";
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>
 )

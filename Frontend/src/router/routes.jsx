@@ -10,12 +10,12 @@ const routes = [
   {
     path: "/home",
     element: <Home />,
-    label: "Home",
+    labelKey: "nav.home",
   },
   {
     path: "/record",
     element: <Record />,
-    label: "Record"
+    labelKey: "nav.record"
   },
   {
     path: "*",

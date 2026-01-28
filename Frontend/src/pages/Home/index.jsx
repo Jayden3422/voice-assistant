@@ -1,16 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Input, Button, message as AntMessage } from "antd";
+import { Button, message as AntMessage } from "antd";
 import "./index.scss";
 import * as api from "../../utils/api";
-import welcomeAudio from "../../assets/audio/welcome.wav";
+import { useI18n } from "../../i18n/LanguageContext.jsx";
+import { ENABLE_BROWSER_TTS, TTS_MODE } from "../../config/tts.js";
 
 const Home = () => {
-  const [hasStarted, setHasStarted] = useState(false); // 是否“开始语音对话”
+  const { t, lang } = useI18n();
+  const [hasStarted, setHasStarted] = useState(false);
   const [messages, setMessages] = useState([]);
-  // const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // 等待后端处理语音
-  const [isWelcomePlaying, setIsWelcomePlaying] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const mediaRecorderRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -20,44 +20,66 @@ const Home = () => {
     }
   };
 
-  // 自动滚动到最后一条
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // 开场白
-  const playWelcomeAudio = () => {
-    setIsWelcomePlaying(true);
-    const audio = new Audio(welcomeAudio);
-
-    audio.onended = () => {
-      setIsWelcomePlaying(false);
-    };
-
-    audio.onerror = (err) => {
-      console.error("播放开场白出错：", err);
-      setIsWelcomePlaying(false);
-    };
-
-    audio.play().catch((err) => {
-      console.error("播放开场白失败：", err);
-      setIsWelcomePlaying(false);
-    });
-  };
-
-  // 点击“开始语音对话”
   const handleStartConversation = () => {
     setHasStarted(true);
     const greeting = {
       id: Date.now(),
       role: "ai",
-      text: "您好，我是您的日程助手，你要记录什么日程？",
+      text: t("home.greeting"),
     };
     setMessages([greeting]);
-    playWelcomeAudio();
+    playGreetingSpeech(t("home.greeting"));
   };
 
-  // 后端音频播放
+  const speakWithBrowserTTS = (text) => {
+    if (!("speechSynthesis" in window)) return false;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "zh" ? "zh-CN" : "en-US";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    return true;
+  };
+
+  const requestBackendTTS = async (text) => {
+    const res = await api.postAPI("/tts", { text, lang });
+    const data = res && res.data ? res.data : res || {};
+    if (data.audio_base64) {
+      playBase64Audio(data.audio_base64);
+      return true;
+    }
+    return false;
+  };
+
+  const playGreetingSpeech = async (text) => {
+    if (TTS_MODE === "browser") {
+      speakWithBrowserTTS(text);
+      return;
+    }
+    if (TTS_MODE === "backend") {
+      try {
+        await requestBackendTTS(text);
+      } catch (err) {
+        console.error("Backend TTS failed:", err);
+      }
+      return;
+    }
+    if (TTS_MODE === "auto") {
+      try {
+        const ok = await requestBackendTTS(text);
+        if (ok) return;
+      } catch (err) {
+        console.error("Backend TTS failed:", err);
+      }
+      if (ENABLE_BROWSER_TTS) {
+        speakWithBrowserTTS(text);
+      }
+    }
+  };
+
   const playBase64Audio = (base64, mimeType = "audio/wav") => {
     try {
       const byteString = atob(base64);
@@ -71,54 +93,55 @@ const Home = () => {
       const audio = new Audio(url);
       audio.play();
     } catch (err) {
-      console.error("播放 AI 语音失败：", err);
+      console.error(`${t("errors.playAiAudio")}:`, err);
     }
   };
 
-  // 音频发送后端
   const sendAudioToBackend = async (blob) => {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
+    formData.append("lang", lang);
 
     setIsProcessing(true);
-    await api.postAPI("/voice", formData).then((res) => {
-      const data = res && res.data ? res.data : res || {};
-      const { user_text, ai_text, audio_base64 } = data;
-      const newMessages = [];
-      if (user_text) {
-        newMessages.push({
-          id: Date.now(),
-          role: "user",
-          text: user_text,
-        });
-      }
-      if (ai_text) {
-        newMessages.push({
-          id: Date.now() + 1,
-          role: "ai",
-          text: ai_text,
-        });
-      }
-      if (newMessages.length > 0) {
-        setMessages((prev) => [...prev, ...newMessages]);
-      }
-      if (audio_base64) {
-        playBase64Audio(audio_base64);
-      }
-    }).catch((err) => {
-      console.error("处理语音失败：", err);
-      AntMessage.error("处理语音失败，请稍后重试");
-    }).finally(() => {
-      setIsProcessing(false);
-    });
+    await api
+      .postAPI("/voice", formData)
+      .then((res) => {
+        const data = res && res.data ? res.data : res || {};
+        const { user_text, ai_text, audio_base64 } = data;
+        const newMessages = [];
+        if (user_text) {
+          newMessages.push({
+            id: Date.now(),
+            role: "user",
+            text: user_text,
+          });
+        }
+        if (ai_text) {
+          newMessages.push({
+            id: Date.now() + 1,
+            role: "ai",
+            text: ai_text,
+          });
+        }
+        if (newMessages.length > 0) {
+          setMessages((prev) => [...prev, ...newMessages]);
+        }
+        if (audio_base64) {
+          playBase64Audio(audio_base64);
+        }
+      })
+      .catch((err) => {
+        console.error(`${t("errors.processingFailed")}:`, err);
+        AntMessage.error(t("errors.processingFailed"));
+      })
+      .finally(() => {
+        setIsProcessing(false);
+      });
   };
 
-  // 开始录音
   const handleStartRecording = async () => {
-    // 欢迎语
-    if (isWelcomePlaying) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      AntMessage.error("当前浏览器不支持语音录制");
+      AntMessage.error(t("errors.browserNotSupported"));
       return;
     }
     try {
@@ -132,21 +155,18 @@ const Home = () => {
       };
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
-        // 停止所有音轨
         stream.getTracks().forEach((track) => track.stop());
-        // 发送给后端
         sendAudioToBackend(blob);
       };
       mediaRecorder.start();
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (err) {
-      console.error("获取音频权限失败：", err);
-      AntMessage.error("无法访问麦克风，请检查权限设置");
+      console.error(`${t("errors.micDenied")}:`, err);
+      AntMessage.error(t("errors.micDenied"));
     }
   };
 
-  // 停止录音
   const handleStopRecording = () => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
@@ -155,58 +175,20 @@ const Home = () => {
     }
   };
 
-  // 文本输入发送
-  // const handleSend = () => {
-  //   const text = input.trim();
-  //   if (!text) return;
-  //   // 用户问题
-  //   const userMessage = {
-  //     id: Date.now(),
-  //     role: "user",
-  //     text,
-  //   };
-  //   setMessages((prev) => [...prev, userMessage]);
-  //   setInput("");
-  //   setTimeout(() => {
-  //     const aiMessage = {
-  //       id: Date.now() + 1,
-  //       role: "ai",
-  //       text: `AI: 收到：「${text}」.\n`,
-  //     };
-  //     setMessages((prev) => [...prev, aiMessage]);
-  //   }, 400);
-  // };
-
-  // const handlePressEnter = (e) => {
-  //   // 按 Enter 发送，Shift+Enter 换行
-  //   if (!e.shiftKey) {
-  //     e.preventDefault();
-  //     handleSend();
-  //   }
-  // };
-
-  // 还没开始：只显示“开始语音对话”
   if (!hasStarted) {
     return (
-      <Button
-        type="primary"
-        size="large"
-        onClick={handleStartConversation}
-      >
-        开始语音对话
+      <Button type="primary" size="large" onClick={handleStartConversation}>
+        {t("home.startConversation")}
       </Button>
     );
   }
 
-  // 已开始：显示聊天界面 + 语音录制按钮
   return (
     <div className="home-chat">
       <div className="chat-container">
         <div className="chat-header">
-          <div className="chat-title">语音驱动日程助手</div>
-          <div className="chat-subtitle">
-            点击下方按钮开始说话，我会帮你在 Google 日历里创建日程
-          </div>
+          <div className="chat-title">{t("home.title")}</div>
+          <div className="chat-subtitle">{t("home.subtitle")}</div>
         </div>
 
         <div className="chat-messages">
@@ -223,7 +205,7 @@ const Home = () => {
                 }`}
               >
                 <div className="chat-bubble-role">
-                  {msg.role === "ai" ? "AI" : "You"}
+                  {msg.role === "ai" ? t("roles.ai") : t("roles.user")}
                 </div>
                 <div className="chat-bubble-text">
                   {msg.text.split("\n").map((line, idx) => (
@@ -238,35 +220,18 @@ const Home = () => {
 
         <div className="chat-voice-bar">
           <div className="chat-voice-hint">
-            {isWelcomePlaying
-              ? "正在播放提示语音，请稍候…"
-              : isRecording
-              ? "正在录音，请开始说出你的日程需求…"
-              : "点击“开始录音”，说出例如：明天上午十点到十一点和公司 CEO 会议"}
+            {isRecording ? t("home.hintRecording") : t("home.hintIdle")}
           </div>
           <Button
             type={isRecording ? "default" : "primary"}
             danger={isRecording}
             onClick={isRecording ? handleStopRecording : handleStartRecording}
-            loading={isProcessing || isWelcomePlaying}
-            disabled={isProcessing || isWelcomePlaying}
+            loading={isProcessing}
+            disabled={isProcessing}
           >
-            {isRecording ? "停止录音" : "开始录音"}
+            {isRecording ? t("home.stopRecording") : t("home.startRecording")}
           </Button>
         </div>
-
-        {/* <div className="chat-input-bar">
-          <Input.TextArea
-            placeholder="也可以直接输入文本，按 Enter 发送（Shift+Enter 换行）"
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={handlePressEnter}
-          />
-          <Button type="primary" onClick={handleSend}>
-            发送
-          </Button>
-        </div> */}
       </div>
     </div>
   );

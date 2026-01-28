@@ -1,25 +1,37 @@
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import routes from "./router/routes";
-import { Menu } from "antd";
+import { Button, Menu } from "antd";
+import { useI18n } from "./i18n/LanguageContext.jsx";
 
 const App = () => {
   const location = useLocation();
+  const { t, toggleLang, lang } = useI18n();
 
   const items = routes
-    .filter(r => r.label)
+    .filter(r => r.labelKey)
     .map(route => ({
       key: route.path,
-      label: <Link to={route.path}>{route.label}</Link>,
+      label: <Link to={route.path}>{t(route.labelKey)}</Link>,
     }));
 
   return (
     <div className="app-root">
       <header className="header">
-        <Menu
-          mode="horizontal"
-          items={items}
-          selectedKeys={[location.pathname]}
-        />
+        <div className="header-menu">
+          <Menu
+            mode="horizontal"
+            items={items}
+            selectedKeys={[location.pathname]}
+          />
+        </div>
+        <Button
+          className="lang-toggle"
+          type="default"
+          onClick={toggleLang}
+          aria-label={`switch language to ${lang === "zh" ? "English" : "Chinese"}`}
+        >
+          {t("nav.switchTo")}
+        </Button>
       </header>
 
       <main className="content">

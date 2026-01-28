@@ -27,6 +27,15 @@ CHROME_PROFILE_DIR = TOOLS_DIR.parent / "chrome_profile"
 
 logger = logging.getLogger(__name__)
 
+def _normalize_lang(lang: str) -> str:
+  if not lang:
+    return "zh"
+  lang = lang.lower()
+  return "en" if lang.startswith("en") else "zh"
+
+def _t(lang: str, zh: str, en: str) -> str:
+  return en if lang == "en" else zh
+
 def _overlap(
   start1: datetime,
   end1: datetime,
@@ -145,11 +154,17 @@ class GoogleCalendarAgent:
   GOTO_TIMEOUT_MS = 30_000  # 1 分钟
   SMALL_WAIT_MS = 2_000
 
-  def __init__(self):
+  def __init__(self, lang: str = "zh"):
+    self.lang = _normalize_lang(lang)
     if not CHROME_PATH.exists():
       raise FileNotFoundError(
-        f"未找到 Chrome 可执行文件：{CHROME_PATH}\n"
-        f"请确认已将 Chrome 放在 chrome-win 目录下。"
+        _t(
+          self.lang,
+          f"未找到 Chrome 可执行文件：{CHROME_PATH}\n"
+          f"请确认已将 Chrome 放在 chrome-win 目录下。",
+          f"Chrome executable not found: {CHROME_PATH}\n"
+          f"Please make sure Chrome is placed under the chrome-win directory.",
+        )
       )
     CHROME_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -159,18 +174,30 @@ class GoogleCalendarAgent:
       return CalendarResult(
         success=False,
         conflict=False,
-        message="解析到的日期或时间不完整，请再说一遍具体日期和开始/结束时间。",
+        message=_t(
+          self.lang,
+          "解析到的日期或时间不完整，请再说一遍具体日期和开始/结束时间。",
+          "Parsed date or time is incomplete. Please say the date and start/end time again.",
+        ),
       )
 
     if cmd.start_time >= cmd.end_time:
       return CalendarResult(
         success=False,
         conflict=False,
-        message="开始时间必须早于结束时间，请重新说一下时间范围。",
+        message=_t(
+          self.lang,
+          "开始时间必须早于结束时间，请重新说一下时间范围。",
+          "Start time must be earlier than end time. Please say the time range again.",
+        ),
       )
 
     logger.info(
-      "处理日程请求：%s %s-%s, 标题=%s",
+      _t(
+        self.lang,
+        "处理日程请求：%s %s-%s, 标题=%s",
+        "Handling schedule request: %s %s-%s, title=%s",
+      ),
       cmd.date,
       cmd.start_time,
       cmd.end_time,
@@ -189,11 +216,17 @@ class GoogleCalendarAgent:
           # 冲突检测
           if self._detect_conflict(op_page, cmd):
             msg = (
-              f"您在 {cmd.date.strftime('%Y-%m-%d')} "
-              f"{cmd.start_time.strftime('%H:%M')} 到 {cmd.end_time.strftime('%H:%M')} "
-              f"已经有日程安排了，请换一个时间。"
+              _t(
+                self.lang,
+                f"您在 {cmd.date.strftime('%Y-%m-%d')} "
+                f"{cmd.start_time.strftime('%H:%M')} 到 {cmd.end_time.strftime('%H:%M')} "
+                f"已经有日程安排了，请换一个时间。",
+                f"You already have an event on {cmd.date.strftime('%Y-%m-%d')} "
+                f"from {cmd.start_time.strftime('%H:%M')} to {cmd.end_time.strftime('%H:%M')}. "
+                f"Please choose another time.",
+              )
             )
-            logger.info("检测到日程冲突")
+            logger.info(_t(self.lang, "检测到日程冲突", "Schedule conflict detected"))
             return CalendarResult(
               success=False,
               conflict=True,
@@ -208,11 +241,17 @@ class GoogleCalendarAgent:
             self._create_event(op_page, cmd)
 
           msg = (
-            f"好的，已经帮你在 {cmd.date.strftime('%Y-%m-%d')} "
-            f"{cmd.start_time.strftime('%H:%M')} 到 {cmd.end_time.strftime('%H:%M')} "
-            f"创建了日程「{cmd.title}」。"
+            _t(
+              self.lang,
+              f"好的，已经帮你在 {cmd.date.strftime('%Y-%m-%d')} "
+              f"{cmd.start_time.strftime('%H:%M')} 到 {cmd.end_time.strftime('%H:%M')} "
+              f"创建了日程「{cmd.title}」。",
+              f"Done. Created an event on {cmd.date.strftime('%Y-%m-%d')} "
+              f"from {cmd.start_time.strftime('%H:%M')} to {cmd.end_time.strftime('%H:%M')}: "
+              f"\"{cmd.title}\".",
+            )
           )
-          logger.info("日程创建成功")
+          logger.info(_t(self.lang, "日程创建成功", "Schedule created successfully"))
           return CalendarResult(
             success=True,
             conflict=False,
@@ -226,25 +265,37 @@ class GoogleCalendarAgent:
             pass
 
     except PlaywrightTimeoutError:
-      logger.exception("访问 Google 日历超时")
+      logger.exception(_t(self.lang, "访问 Google 日历超时", "Timed out accessing Google Calendar"))
       return CalendarResult(
         success=False,
         conflict=False,
-        message="连接 Google 日历超时，可能是网络较慢，请稍后再试。",
+        message=_t(
+          self.lang,
+          "连接 Google 日历超时，可能是网络较慢，请稍后再试。",
+          "Timed out connecting to Google Calendar. The network may be slow; please try again later.",
+        ),
       )
     except PlaywrightError as e:
-      logger.exception("Playwright 异常: %s", e)
+      logger.exception(_t(self.lang, "Playwright 异常: %s", "Playwright error: %s"), e)
       return CalendarResult(
         success=False,
         conflict=False,
-        message="在操作 Google 日历时发生错误，请稍后再试。",
+        message=_t(
+          self.lang,
+          "在操作 Google 日历时发生错误，请稍后再试。",
+          "An error occurred while operating Google Calendar. Please try again later.",
+        ),
       )
     except Exception as e:
-      logger.exception("未知异常: %s", e)
+      logger.exception(_t(self.lang, "未知异常: %s", "Unknown error: %s"), e)
       return CalendarResult(
         success=False,
         conflict=False,
-        message=f"发生未知错误，无法创建日程：{e}",
+        message=_t(
+          self.lang,
+          f"发生未知错误，无法创建日程：{e}",
+          f"An unknown error occurred. Unable to create the event: {e}",
+        ),
       )
 
   def _create_or_load_context(self, pw) -> tuple[BrowserContext, Page]:
@@ -272,7 +323,7 @@ class GoogleCalendarAgent:
     for p in context.pages:
       try:
         if self._is_logged_in_calendar_page(p):
-          logger.info("检测到已登录的 Calendar 页面：%s", p.url)
+          logger.info(_t(self.lang, "检测到已登录的 Calendar 页面：%s", "Detected logged-in Calendar page: %s"), p.url)
           return
       except PlaywrightError:
         continue
@@ -290,25 +341,42 @@ class GoogleCalendarAgent:
       else:
         entry_page = context.new_page()
 
-      logger.info("正在打开 Google Calendar 入口页面...")
+      logger.info(_t(self.lang, "正在打开 Google Calendar 入口页面...", "Opening Google Calendar entry page..."))
 
       # 只发起导航，不再强制等 load_state
       try:
         # 用较短超时时间
         entry_page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=15_000)
       except PlaywrightTimeoutError:
-        logger.warning("打开 Google Calendar 入口页面 DOMContentLoaded 超时，继续等待登录状态变化。")
+        logger.warning(
+          _t(
+            self.lang,
+            "打开 Google Calendar 入口页面 DOMContentLoaded 超时，继续等待登录状态变化。",
+            "DOMContentLoaded timed out when opening Google Calendar entry page; waiting for login state.",
+          )
+        )
     else:
-      logger.info("检测到已有登录页（accounts.google.com），不重新打开 LOGIN_URL。")
+      logger.info(
+        _t(
+          self.lang,
+          "检测到已有登录页（accounts.google.com），不重新打开 LOGIN_URL。",
+          "Login page detected (accounts.google.com); not reopening LOGIN_URL.",
+        )
+      )
 
     print(
-      "\n[GoogleCalendarAgent] 如果你尚未登录，请在刚打开的 Chrome 窗口中手动完成 Google 登录和多因子认证。\n"
-      "完成后，确保最终进入 Google Calendar 主界面。\n"
+      _t(
+        self.lang,
+        "\n[GoogleCalendarAgent] 如果你尚未登录，请在刚打开的 Chrome 窗口中手动完成 Google 登录和多因子认证。\n"
+        "完成后，确保最终进入 Google Calendar 主界面。\n",
+        "\n[GoogleCalendarAgent] If you are not logged in, please complete Google login and MFA in the Chrome window that just opened.\n"
+        "After that, make sure you reach the Google Calendar main page.\n",
+      )
     )
 
     # 等待任意一个 tab 变成已登录的 Calendar 页面
     calendar_page = self._wait_for_logged_in_calendar(context)
-    logger.info("登录完成，检测到 Calendar 页面：%s", calendar_page.url)
+    logger.info(_t(self.lang, "登录完成，检测到 Calendar 页面：%s", "Login complete. Calendar page detected: %s"), calendar_page.url)
 
   def _wait_for_logged_in_calendar(
     self,
@@ -326,13 +394,25 @@ class GoogleCalendarAgent:
       for p in pages:
         try:
           if self._is_logged_in_calendar_page(p):
-            print(f"[GoogleCalendarAgent] 检测到已登录的 Calendar 页面：{p.url}")
+            print(
+              _t(
+                self.lang,
+                f"[GoogleCalendarAgent] 检测到已登录的 Calendar 页面：{p.url}",
+                f"[GoogleCalendarAgent] Detected logged-in Calendar page: {p.url}",
+              )
+            )
             return p
         except PlaywrightError:
           continue
       # 每秒检查一次
       pages[0].wait_for_timeout(1000)
-    raise RuntimeError("登录超时：请重新运行并尽快在浏览器中完成登录。")
+    raise RuntimeError(
+      _t(
+        self.lang,
+        "登录超时：请重新运行并尽快在浏览器中完成登录。",
+        "Login timed out. Please rerun and complete login in the browser promptly.",
+      )
+    )
 
   @staticmethod
   def _is_logged_in_calendar_page(page: Page) -> bool:
@@ -366,17 +446,29 @@ class GoogleCalendarAgent:
   def _open_day_view(self, page: Page, cmd: CalendarCommand) -> None:
     # 跳转到指定日期的日视图
     url = f"{DAY_VIEW_BASE}/{cmd.date.year}/{cmd.date.month}/{cmd.date.day}"
-    logger.info("打开日视图：%s", url)
+    logger.info(_t(self.lang, "打开日视图：%s", "Opening day view: %s"), url)
     try:
       page.goto(url, wait_until="domcontentloaded", timeout=self.GOTO_TIMEOUT_MS)
     except PlaywrightTimeoutError:
-      logger.warning("goto 日视图时 DOMContentLoaded 超时，可能网络较慢，但尝试继续。")
+      logger.warning(
+        _t(
+          self.lang,
+          "goto 日视图时 DOMContentLoaded 超时，可能网络较慢，但尝试继续。",
+          "DOMContentLoaded timed out when opening day view; network may be slow, continuing.",
+        )
+      )
 
     # 等资源加载，如果 networkidle 达不到就忽略
     try:
       page.wait_for_load_state("networkidle", timeout=10_000)
     except PlaywrightTimeoutError:
-      logger.debug("日视图未达到 networkidle，忽略该错误，继续执行。")
+      logger.debug(
+        _t(
+          self.lang,
+          "日视图未达到 networkidle，忽略该错误，继续执行。",
+          "Day view did not reach networkidle; ignoring and continuing.",
+        )
+      )
 
     # 额外，日历 UI 渲染完
     page.wait_for_timeout(self.SMALL_WAIT_MS)
@@ -386,7 +478,10 @@ class GoogleCalendarAgent:
     target_end = datetime.combine(cmd.date, cmd.end_time)
 
     event_buttons = page.query_selector_all('div[role="button"][data-eventchip]')
-    logger.info("本日视图中检测到 %d 个事件候选节点", len(event_buttons))
+    logger.info(
+      _t(self.lang, "本日视图中检测到 %d 个事件候选节点", "Detected %d candidate events in day view"),
+      len(event_buttons),
+    )
 
     for btn in event_buttons:
       try:
@@ -408,14 +503,14 @@ class GoogleCalendarAgent:
 
       event_start, event_end = parsed
       if _overlap(target_start, target_end, event_start, event_end):
-        logger.info("检测到冲突事件：%s", label)
+        logger.info(_t(self.lang, "检测到冲突事件：%s", "Conflict event detected: %s"), label)
         return True
 
-    logger.info("未发现时间冲突")
+    logger.info(_t(self.lang, "未发现时间冲突", "No time conflict found"))
     return False
 
   def _create_event(self, page: Page, cmd: CalendarCommand) -> None:
-    logger.info("使用快捷键 'c' 打开创建事件弹窗")
+    logger.info(_t(self.lang, "使用快捷键 'c' 打开创建事件弹窗", "Using shortcut 'c' to open create-event dialog"))
     try:
       grid = page.locator('[role="grid"]').first
       if grid.count() > 0:
@@ -424,7 +519,7 @@ class GoogleCalendarAgent:
       else:
         page.click("body", position={"x": 50, "y": 50})
     except Exception:
-      logger.warning("激活页面失败，继续尝试发送快捷键。")
+      logger.warning(_t(self.lang, "激活页面失败，继续尝试发送快捷键。", "Failed to activate page; retrying shortcut."))
 
     page.keyboard.press("c")
     page.wait_for_timeout(1000)
@@ -437,11 +532,22 @@ class GoogleCalendarAgent:
         timeout=8000,
       )
     except PlaywrightTimeoutError:
-      logger.error("没找到事件标题输入框")
-      raise RuntimeError("创建事件失败：无法定位标题输入框。")
+      logger.error(_t(self.lang, "没找到事件标题输入框", "Event title input not found"))
+      raise RuntimeError(
+        _t(self.lang, "创建事件失败：无法定位标题输入框。", "Failed to create event: cannot locate title input.")
+      )
 
     title_input.fill(cmd.title)
-    logger.info("已填写事件标题：%s", cmd.title)
+    logger.info(_t(self.lang, "已填写事件标题：%s", "Event title filled: %s"), cmd.title)
+
+    def fill_and_confirm(locator, value: str) -> None:
+      locator.click()
+      locator.fill(value)
+      try:
+        locator.press("Enter")
+      except Exception:
+        pass
+      page.wait_for_timeout(200)
 
     # 日期输入框
     start_date_input = None
@@ -462,21 +568,26 @@ class GoogleCalendarAgent:
         end_date_input = loc.first
         break
     
-    date_str = cmd.date.strftime("%Y/%m/%d")
+    date_format = "%m/%d/%Y" if self.lang == "en" else "%Y/%m/%d"
+    date_str = cmd.date.strftime(date_format)
 
     if start_date_input:
-      logger.info("填写开始日期：%s", date_str)
-      start_date_input.click()
-      start_date_input.fill(date_str)
+      logger.info(_t(self.lang, "填写开始日期：%s", "Start date filled: %s"), date_str)
+      fill_and_confirm(start_date_input, date_str)
     else:
-      logger.warning("未找到开始日期输入框，可能沿用默认日期（容易出现加到 12 号的问题）。")
+      logger.warning(
+        _t(
+          self.lang,
+          "未找到开始日期输入框，可能沿用默认日期（容易出现加到 12 号的问题）。",
+          "Start date input not found; default date may be used (can cause adding to the 12th).",
+        )
+      )
 
     if end_date_input:
-      logger.info("填写结束日期：%s", date_str)
-      end_date_input.click()
-      end_date_input.fill(date_str)
+      logger.info(_t(self.lang, "填写结束日期：%s", "End date filled: %s"), date_str)
+      fill_and_confirm(end_date_input, date_str)
     else:
-      logger.warning("未找到结束日期输入框，可能沿用默认日期。")
+      logger.warning(_t(self.lang, "未找到结束日期输入框，可能沿用默认日期。", "End date input not found; default date may be used."))
 
     # 时间输入框
     start_time_input = None
@@ -501,18 +612,21 @@ class GoogleCalendarAgent:
     end_time_str = cmd.end_time.strftime("%H:%M")
 
     if start_time_input:
-      logger.info("找到开始时间输入框，填写：%s", start_time_str)
-      start_time_input.click()
-      start_time_input.fill(start_time_str)
+      logger.info(_t(self.lang, "找到开始时间输入框，填写：%s", "Start time input found; filled: %s"), start_time_str)
+      fill_and_confirm(start_time_input, start_time_str)
     else:
-      logger.warning("未找到开始时间输入框，保留默认开始时间。")
+      logger.warning(_t(self.lang, "未找到开始时间输入框，保留默认开始时间。", "Start time input not found; keeping default."))
 
     if end_time_input:
-      logger.info("找到结束时间输入框，填写：%s", end_time_str)
-      end_time_input.click()
-      end_time_input.fill(end_time_str)
+      logger.info(_t(self.lang, "找到结束时间输入框，填写：%s", "End time input found; filled: %s"), end_time_str)
+      fill_and_confirm(end_time_input, end_time_str)
     else:
-      logger.warning("未找到结束时间输入框，保留默认结束时间。")
+      logger.warning(_t(self.lang, "未找到结束时间输入框，保留默认结束时间。", "End time input not found; keeping default."))
+
+    # 可能被 UI 自动改成次日，最后再确认结束日期
+    if end_date_input:
+      logger.info(_t(self.lang, "确认结束日期：%s", "Confirming end date: %s"), date_str)
+      fill_and_confirm(end_date_input, date_str)
 
     # 保存按钮
     save_button = None
@@ -531,12 +645,25 @@ class GoogleCalendarAgent:
           break
 
     if not save_button:
-      logger.error("未找到保存按钮，可能按钮文案或结构有变化。")
-      raise RuntimeError("创建事件失败：无法定位保存按钮。")
+      logger.error(_t(self.lang, "未找到保存按钮，可能按钮文案或结构有变化。", "Save button not found; label or structure may have changed."))
+      raise RuntimeError(
+        _t(self.lang, "创建事件失败：无法定位保存按钮。", "Failed to create event: cannot locate Save button.")
+      )
+
+    # 等待保存按钮可点击（有时需要离开输入框/关闭弹层）
+    for _ in range(20):
+      if save_button.is_enabled():
+        break
+      try:
+        page.keyboard.press("Escape")
+      except Exception:
+        pass
+      page.click("body", position={"x": 10, "y": 10})
+      page.wait_for_timeout(250)
 
     save_button.click()
     page.wait_for_timeout(self.SMALL_WAIT_MS)
-    logger.info("已点击保存事件按钮")
+    logger.info(_t(self.lang, "已点击保存事件按钮", "Save button clicked"))
 
   def _create_multi_day_event(self, page: Page, cmd: CalendarCommand) -> None:
     # undo: 跨多日
