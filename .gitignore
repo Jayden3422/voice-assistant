@@ -27,3 +27,6 @@ __pycache__/
 *.pyc
 chrome-win
 chrome_profile
+
+# Private
+.env
