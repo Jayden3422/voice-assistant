@@ -33,7 +33,7 @@ async def generate_reply_draft(
     Generate a reply draft with citations.
     Returns {"reply_text": "...", "citations": [...]}
     """
-    model = model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    model = model or os.getenv("OPENAI_AUTOPILOT_REPLY_MODEL") or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     system_prompt = _load_prompt("autopilot_reply_draft.txt")
 
     evidence_text = ""

@@ -69,7 +69,7 @@ async def extract_autopilot_json(
     Returns validated JSON dict. Raises on persistent validation failure.
     """
     client = get_openai_client()
-    model = model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    model = model or os.getenv("OPENAI_AUTOPILOT_EXTRACT_MODEL") or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     schema = _load_schema(schema_name)
     prompt_template = _load_prompt(prompt_name)
     tools = _build_tools(schema)

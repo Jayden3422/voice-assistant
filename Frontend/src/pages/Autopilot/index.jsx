@@ -115,7 +115,15 @@ const Autopilot = () => {
       });
       const data = res?.data || res || {};
       setConfirmResult(data);
-      AntMessage.success(t("autopilot.confirmSuccess"));
+      const results = data?.results || [];
+      const calendarFailed = results.some(
+        (r) => r.action_type === "create_meeting" && (r.status === "failed" || r.status === "blocked")
+      );
+      if (calendarFailed) {
+        AntMessage.warning(t("autopilot.confirmCalendarFailed"));
+      } else {
+        AntMessage.success(t("autopilot.confirmSuccess"));
+      }
     } catch (err) {
       console.error("Autopilot confirm error:", err);
       AntMessage.error(t("autopilot.confirmError"));

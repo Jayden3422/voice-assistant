@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 STORE_DIR = Path(__file__).resolve().parent.parent / "rag_store"
 _retrieval_cache: dict[str, list[dict]] = {}
+_faiss_index = None
+_faiss_meta: list[dict] | None = None
+_faiss_index_mtime: float | None = None
+_faiss_meta_mtime: float | None = None
 
 
 def _query_hash(query: str, top_k: int) -> str:
@@ -50,10 +54,25 @@ async def retrieve(
     q_vec = np.array([resp.data[0].embedding], dtype="float32")
     faiss.normalize_L2(q_vec)
 
-    # Load index and metadata
-    index = faiss.read_index(str(index_path))
-    with open(meta_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
+    # Load index and metadata with caching
+    global _faiss_index, _faiss_meta, _faiss_index_mtime, _faiss_meta_mtime
+    index_mtime = index_path.stat().st_mtime
+    meta_mtime = meta_path.stat().st_mtime
+    if (
+        _faiss_index is None
+        or _faiss_meta is None
+        or _faiss_index_mtime != index_mtime
+        or _faiss_meta_mtime != meta_mtime
+    ):
+        _faiss_index = faiss.read_index(str(index_path))
+        with open(meta_path, "r", encoding="utf-8") as f:
+            _faiss_meta = json.load(f)
+        _faiss_index_mtime = index_mtime
+        _faiss_meta_mtime = meta_mtime
+        _retrieval_cache.clear()
+
+    index = _faiss_index
+    meta = _faiss_meta
 
     actual_k = min(top_k, index.ntotal)
     if actual_k == 0:

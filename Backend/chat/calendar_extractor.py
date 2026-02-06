@@ -83,7 +83,7 @@ async def extract_calendar_event(
     end_time (str HH:MM), title (str), attendees (list[str]).
     """
     client = get_openai_client()
-    model = model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    model = model or os.getenv("OPENAI_CALENDAR_MODEL") or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     schema = _load_schema()
     template = _load_prompt_template()
 

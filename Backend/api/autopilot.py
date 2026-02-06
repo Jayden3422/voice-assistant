@@ -155,7 +155,12 @@ async def autopilot_confirm(req: AutopilotConfirmRequest):
 
     results = []
     actions = list(req.actions or [])
-    locale = run.get("extracted_json", {}).get("conversation_language", "en") if isinstance(run.get("extracted_json"), dict) else "en"
+    extracted_json = run.get("extracted_json", {}) if isinstance(run.get("extracted_json"), dict) else {}
+    locale = extracted_json.get("conversation_language", "en") if isinstance(extracted_json, dict) else "en"
+    transcript = run.get("transcript", "") if isinstance(run, dict) else ""
+    summary = extracted_json.get("summary", "") if isinstance(extracted_json, dict) else ""
+
+    actions = await _fill_calendar_payloads_from_transcript(actions, transcript, locale)
 
     # Precompute which actions are executable
     action_meta = []
@@ -177,11 +182,16 @@ async def autopilot_confirm(req: AutopilotConfirmRequest):
     calendar_success = True
     confirmation_text = ""
     confirmation_html = ""
+    from utils.timezone import now as now_toronto
+    current_dt = now_toronto()
 
     if calendar_indices:
         for idx in calendar_indices:
             action = actions[idx]
             try:
+                payload = action.get("payload") or {}
+                payload = _finalize_calendar_payload(payload, summary, locale, current_dt)
+                action["payload"] = payload
                 result = await execute_action(action, lang=locale)
                 results_by_index[idx] = result
                 if result.get("status") != "success":
@@ -361,7 +371,6 @@ async def _enrich_actions(
     Post-process actions: fill in missing payload fields from extracted data,
     resolve relative dates/times, and drop actions that have no viable data.
     """
-    from datetime import datetime, timedelta
     from utils.timezone import now as now_toronto
 
     current_dt = now_toronto()
@@ -408,18 +417,6 @@ async def _enrich_actions(
             "payload": {},
         })
 
-    extracted_slot = None
-    needs_slot = any(
-        (a.get("action_type") == "create_meeting" and not (a.get("payload") or {}).get("date"))
-        or (a.get("action_type") == "create_meeting" and not (a.get("payload") or {}).get("start_time"))
-        for a in action_list
-    )
-    if needs_slot and transcript:
-        try:
-            extracted_slot = await extract_calendar_event(transcript, lang=lang)
-        except Exception:
-            extracted_slot = None
-
     enriched = []
     for action in action_list:
         a = {**action}
@@ -427,36 +424,7 @@ async def _enrich_actions(
         atype = a.get("action_type", "none")
 
         if atype == "create_meeting":
-            # Fill defaults for missing meeting fields
-            if extracted_slot:
-                payload.setdefault("date", extracted_slot.get("date"))
-                payload.setdefault("start_time", extracted_slot.get("start_time"))
-                payload.setdefault("end_time", extracted_slot.get("end_time"))
-                payload.setdefault("title", extracted_slot.get("title"))
-                if "attendees" not in payload and "attendees" in extracted_slot:
-                    payload["attendees"] = extracted_slot.get("attendees", [])
-            if not payload.get("title"):
-                payload["title"] = summary[:80] if summary else "Meeting"
-            if not payload.get("date"):
-                # Default to tomorrow
-                payload["date"] = (current_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-            else:
-                # Validate / resolve existing date (GPT may return relative string)
-                payload["date"] = _resolve_date(payload["date"], current_dt, lang)
-            if not payload.get("start_time"):
-                payload["start_time"] = "10:00"
-            else:
-                payload["start_time"] = _resolve_time(payload["start_time"])
-            if not payload.get("end_time"):
-                try:
-                    st = datetime.strptime(payload["start_time"], "%H:%M")
-                    payload["end_time"] = (st + timedelta(hours=1)).strftime("%H:%M")
-                except Exception:
-                    payload["end_time"] = "11:00"
-            else:
-                payload["end_time"] = _resolve_time(payload["end_time"])
-            if "attendees" not in payload:
-                payload["attendees"] = []
+            payload = _prepare_calendar_payload_for_preview(payload, summary, lang, current_dt)
 
         elif atype == "send_slack_summary":
             if not payload.get("message"):
@@ -553,6 +521,95 @@ def _resolve_time(value: str) -> str:
         except ValueError:
             continue
     return value
+
+
+def _prepare_calendar_payload_for_preview(payload: dict, summary: str, lang: str, current_dt) -> dict:
+    """Ensure calendar payload has editable fields without forcing defaults or LLM calls."""
+    from datetime import datetime, timedelta
+    if not payload.get("title"):
+        payload["title"] = summary[:80] if summary else ("Meeting" if lang == "en" else "æ—¥ç¨‹å®‰æŽ’")
+    if "date" not in payload:
+        payload["date"] = ""
+    if payload.get("date"):
+        payload["date"] = _resolve_date(payload["date"], current_dt, lang)
+    if "start_time" not in payload:
+        payload["start_time"] = ""
+    if payload.get("start_time"):
+        payload["start_time"] = _resolve_time(payload["start_time"])
+    if "end_time" not in payload:
+        if payload.get("start_time"):
+            try:
+                st = datetime.strptime(payload["start_time"], "%H:%M")
+                payload["end_time"] = (st + timedelta(hours=1)).strftime("%H:%M")
+            except Exception:
+                payload["end_time"] = ""
+        else:
+            payload["end_time"] = ""
+    else:
+        if payload.get("end_time"):
+            payload["end_time"] = _resolve_time(payload["end_time"])
+    if "attendees" not in payload:
+        payload["attendees"] = []
+    return payload
+
+
+async def _fill_calendar_payloads_from_transcript(actions: list[dict], transcript: str, lang: str) -> list[dict]:
+    if not transcript:
+        return actions
+    needs = any(
+        a.get("action_type") == "create_meeting"
+        and (not (a.get("payload") or {}).get("date") or not (a.get("payload") or {}).get("start_time"))
+        for a in actions
+    )
+    if not needs:
+        return actions
+    try:
+        extracted = await extract_calendar_event(transcript, lang=lang)
+    except Exception:
+        return actions
+
+    for action in actions:
+        if action.get("action_type") != "create_meeting":
+            continue
+        payload = {**(action.get("payload") or {})}
+        if not payload.get("date") and extracted.get("date"):
+            payload["date"] = extracted.get("date")
+        if not payload.get("start_time") and extracted.get("start_time"):
+            payload["start_time"] = extracted.get("start_time")
+        if not payload.get("end_time") and extracted.get("end_time"):
+            payload["end_time"] = extracted.get("end_time")
+        if not payload.get("title") and extracted.get("title"):
+            payload["title"] = extracted.get("title")
+        if "attendees" not in payload and "attendees" in extracted:
+            payload["attendees"] = extracted.get("attendees", [])
+        action["payload"] = payload
+    return actions
+
+
+def _finalize_calendar_payload(payload: dict, summary: str, lang: str, current_dt) -> dict:
+    """Fill missing fields with defaults right before execution."""
+    from datetime import datetime, timedelta
+    if not payload.get("title"):
+        payload["title"] = summary[:80] if summary else ("Meeting" if lang == "en" else "æ—¥ç¨‹å®‰æŽ’")
+    if payload.get("date"):
+        payload["date"] = _resolve_date(payload["date"], current_dt, lang)
+    else:
+        payload["date"] = (current_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    if payload.get("start_time"):
+        payload["start_time"] = _resolve_time(payload["start_time"])
+    else:
+        payload["start_time"] = "10:00"
+    if payload.get("end_time"):
+        payload["end_time"] = _resolve_time(payload["end_time"])
+    else:
+        try:
+            st = datetime.strptime(payload["start_time"], "%H:%M")
+            payload["end_time"] = (st + timedelta(hours=1)).strftime("%H:%M")
+        except Exception:
+            payload["end_time"] = "11:00"
+    if "attendees" not in payload:
+        payload["attendees"] = []
+    return payload
 
 
 def _build_rag_query(extracted: dict) -> str:
