@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import os
+import socket
 import time
 import uuid
 from datetime import datetime
@@ -653,5 +654,69 @@ async def handle_calendar_text(request: CalendarTextRequest):
 
 
 if __name__ == "__main__":
-  uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+  def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+      return default
+    try:
+      return int(raw)
+    except ValueError:
+      return default
+
+
+  def _is_bindable(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+      sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      try:
+        sock.bind((host, port))
+        return True
+      except OSError:
+        return False
+
+
+  def _pick_port(host: str, preferred_port: int, retries: int) -> int:
+    if _is_bindable(host, preferred_port):
+      return preferred_port
+
+    fallback_base = _int_env("BACKEND_FALLBACK_PORT", 8080)
+    fallback_retries = max(0, _int_env("BACKEND_FALLBACK_PORT_RETRIES", 200))
+    for offset in range(0, fallback_retries + 1):
+      candidate = fallback_base + offset
+      if candidate == preferred_port:
+        continue
+      if _is_bindable(host, candidate):
+        logger.warning(
+          "Preferred port %s is unavailable; using fallback port %s",
+          preferred_port,
+          candidate,
+        )
+        return candidate
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+      sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      try:
+        sock.bind((host, 0))
+      except OSError as e:
+        raise RuntimeError(
+          f"Failed to find any available port on host {host}. "
+          "Check firewall/antivirus policy or run with a different BACKEND_HOST."
+        ) from e
+      random_port = int(sock.getsockname()[1])
+
+    logger.warning(
+      "No available port in configured ranges; using OS-assigned port %s",
+      random_port,
+    )
+    return random_port
+
+
+  host = os.getenv("BACKEND_HOST", "127.0.0.1")
+  preferred_port = _int_env("BACKEND_PORT", 8888)
+  port_retries = max(0, _int_env("BACKEND_PORT_RETRIES", 0))
+  reload_enabled = os.getenv("BACKEND_RELOAD", "true").lower() in ("1", "true", "yes", "on")
+
+  selected_port = _pick_port(host, preferred_port, port_retries)
+  print(f"Starting backend on {host}:{selected_port} (reload={reload_enabled})")
+  logger.info("Starting backend on %s:%s (reload=%s)", host, selected_port, reload_enabled)
+  uvicorn.run("main:app", host=host, port=selected_port, reload=reload_enabled)
 
