@@ -16,6 +16,27 @@
 
 ---
 
+## Table of Contents
+
+- [Core Differentiated Value](#core-differentiated-value)
+- [Core Workflows](#core-workflows)
+- [Architecture Highlights and Directory](#architecture-highlights-and-directory)
+- [Tech Stack and Versions](#tech-stack-and-versions)
+- [Quick Demo](#quick-demo)
+- [Environment Setup](#environment-setup)
+- [Run](#run)
+- [MCP Server](#mcp-server)
+- [Key Features](#key-features)
+- [API Quick Reference](#api-quick-reference)
+- [Testing and Quality Assurance](#testing-and-quality-assurance)
+- [Known Issues and Limitations](#known-issues-and-limitations)
+- [Playwright Calendar Automation Deep Dive](#playwright-calendar-automation-deep-dive)
+- [Code Entry Points](#code-entry-points)
+- [Links](#links)
+
+---
+
+<a id="core-differentiated-value"></a>
 ## Core Differentiated Value
 
 This is not a voice assistant demo. It is an AI workflow system designed for production use.
@@ -62,6 +83,7 @@ Parallel execution + audit logging
 
 ---
 
+<a id="core-workflows"></a>
 ## Core Workflows
 
 ### 1. Voice/Text Scheduling
@@ -95,6 +117,7 @@ On Autopilot, `Start Recording` only performs live transcription into the input 
 
 ---
 
+<a id="architecture-highlights-and-directory"></a>
 ## Architecture Highlights and Directory
 
 ### Key Design Decisions
@@ -160,6 +183,7 @@ CREATE TABLE runs (
 
 ---
 
+<a id="tech-stack-and-versions"></a>
 ## Tech Stack and Versions
 
 ### Frontend
@@ -190,6 +214,7 @@ CREATE TABLE runs (
 
 ---
 
+<a id="quick-demo"></a>
 ## Quick Demo
 
 ### Example: Autopilot
@@ -222,6 +247,7 @@ Note: all actions require human confirmation before execution (`dry_run` preview
 
 ---
 
+<a id="environment-setup"></a>
 ## Environment Setup
 
 ### Frontend
@@ -282,6 +308,7 @@ Note: streaming STT/TTS tuning variables (for example `STREAM_STT_*`, `TTS_SEGME
 
 ---
 
+<a id="run"></a>
 ## Run
 
 ```bash
@@ -304,6 +331,7 @@ Open: `http://localhost:5173`
 
 ---
 
+<a id="mcp-server"></a>
 ## MCP Server
 
 The project exposes all core capabilities as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, allowing Claude Desktop, Claude Code, or any MCP-compatible client to call them directly.
@@ -363,6 +391,7 @@ Note: first startup may take ~60s while FAISS loads. Subsequent tool calls are i
 
 ---
 
+<a id="key-features"></a>
 ## Key Features
 
 ### 1. Bilingual Support
@@ -416,6 +445,7 @@ Page: `/record`, with type filtering, detail view, and failed-action retry.
 
 ---
 
+<a id="api-quick-reference"></a>
 ## API Quick Reference
 
 | Endpoint | Method | Description |
@@ -433,6 +463,7 @@ Page: `/record`, with type filtering, detail view, and failed-action retry.
 
 ---
 
+<a id="testing-and-quality-assurance"></a>
 ## Testing and Quality Assurance
 
 ### Testing Strategy
@@ -464,6 +495,7 @@ Future expansion suggestions: E2E tests, performance benchmarks, concurrent load
 
 ---
 
+<a id="known-issues-and-limitations"></a>
 ## Known Issues and Limitations
 
 - First-time Google Calendar use requires manual login + MFA
@@ -473,6 +505,7 @@ Future expansion suggestions: E2E tests, performance benchmarks, concurrent load
 
 ---
 
+<a id="playwright-calendar-automation-deep-dive"></a>
 ## Playwright Calendar Automation Deep Dive
 
 ### Why Playwright
@@ -500,6 +533,7 @@ Compared with OAuth-heavy Calendar API integration, this approach is faster to o
 
 ---
 
+<a id="code-entry-points"></a>
 ## Code Entry Points
 
 - Orchestration: `Backend/api/autopilot.py`
@@ -516,6 +550,7 @@ Compared with OAuth-heavy Calendar API integration, this approach is faster to o
 
 ---
 
+<a id="links"></a>
 ## Links
 
 - GitHub: https://github.com/Jayden3422/Voice-Autopilot

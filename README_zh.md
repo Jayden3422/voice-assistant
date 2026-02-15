@@ -16,6 +16,27 @@
 
 ---
 
+## 目录
+
+- [核心差异化价值](#core-differentiated-value-zh)
+- [核心工作流](#core-workflows-zh)
+- [架构亮点与目录](#architecture-highlights-and-directory-zh)
+- [技术栈与版本](#tech-stack-and-versions-zh)
+- [快速演示](#quick-demo-zh)
+- [环境配置](#environment-setup-zh)
+- [运行](#run-zh)
+- [MCP Server](#mcp-server-zh)
+- [核心功能](#key-features-zh)
+- [API 速查](#api-quick-reference-zh)
+- [测试与质量保证](#testing-and-quality-assurance-zh)
+- [已知问题与限制](#known-issues-and-limitations-zh)
+- [Playwright 日历自动化技术详解](#playwright-calendar-automation-deep-dive-zh)
+- [代码入口速查](#code-entry-points-zh)
+- [链接](#links-zh)
+
+---
+
+<a id="core-differentiated-value-zh"></a>
 ## 🎯 核心差异化价值
 
 这不是语音助手 Demo，而是面向生产环境的 AI 工作流系统。
@@ -61,6 +82,7 @@ RAG 检索依据文档
 
 ---
 
+<a id="core-workflows-zh"></a>
 ## 🚀 核心工作流
 
 ### 1. 语音/文字日程
@@ -94,6 +116,7 @@ Autopilot 页中，`Start Recording` 仅用于实时转文字并写入输入框�
 
 ---
 
+<a id="architecture-highlights-and-directory-zh"></a>
 ## 🏗️ 架构亮点与目录
 
 ### 关键设计决策
@@ -159,6 +182,7 @@ CREATE TABLE runs (
 
 ---
 
+<a id="tech-stack-and-versions-zh"></a>
 ## 📊 技术栈与版本
 
 ### 前端
@@ -189,6 +213,7 @@ CREATE TABLE runs (
 
 ---
 
+<a id="quick-demo-zh"></a>
 ## 🎥 快速演示
 
 ### 示例：Autopilot
@@ -221,6 +246,7 @@ CREATE TABLE runs (
 
 ---
 
+<a id="environment-setup-zh"></a>
 ## ⚙️ 环境配置
 
 ### 前端
@@ -281,6 +307,7 @@ SMTP_TIMEOUT=30
 
 ---
 
+<a id="run-zh"></a>
 ## ▶️ 运行
 
 ```bash
@@ -303,6 +330,7 @@ curl -X POST http://localhost:8888/ingest
 
 ---
 
+<a id="mcp-server-zh"></a>
 ## 🔗 MCP Server
 
 项目将所有核心能力通过 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 协议暴露，Claude Desktop、Claude Code 等 MCP 客户端可直接调用。
@@ -362,6 +390,7 @@ python Backend/mcp/test_mcp_client.py search_knowledge_base
 
 ---
 
+<a id="key-features-zh"></a>
 ## 🧩 核心功能
 
 ### 1. 中英双语
@@ -417,6 +446,7 @@ python Backend/mcp/test_mcp_client.py search_knowledge_base
 
 ---
 
+<a id="api-quick-reference-zh"></a>
 ## 🔌 API 速查
 
 | 端点 | 方法 | 说明 |
@@ -434,6 +464,7 @@ python Backend/mcp/test_mcp_client.py search_knowledge_base
 
 ---
 
+<a id="testing-and-quality-assurance-zh"></a>
 ## ✅ 测试与质量保证
 
 ### 测试策略
@@ -465,6 +496,7 @@ python -m pytest tests/test_autopilot.py -v
 
 ---
 
+<a id="known-issues-and-limitations-zh"></a>
 ## ⚠️ 已知问题与限制
 
 - 首次使用 Google Calendar 需手动登录 + MFA
@@ -474,6 +506,7 @@ python -m pytest tests/test_autopilot.py -v
 
 ---
 
+<a id="playwright-calendar-automation-deep-dive-zh"></a>
 ## 🤖 Playwright 日历自动化技术详解
 
 ### 为什么选择 Playwright
@@ -501,6 +534,7 @@ python -m pytest tests/test_autopilot.py -v
 
 ---
 
+<a id="code-entry-points-zh"></a>
 ## 🎯 代码入口速查
 
 - 核心编排：`Backend/api/autopilot.py`
@@ -517,6 +551,7 @@ python -m pytest tests/test_autopilot.py -v
 
 ---
 
+<a id="links-zh"></a>
 ## 🔗 链接
 
 - GitHub：https://github.com/Jayden3422/Voice-Autopilot
