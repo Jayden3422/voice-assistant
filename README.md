@@ -130,7 +130,10 @@ Voice-Autopilot/
 │   ├── tools/                   # speech / calendar_agent / models
 │   ├── business/                # autopilot_schema / calendar_schema
 │   ├── store/                   # SQLite init + runs CRUD
-│   └── tests/test_autopilot.py  # 12 tests
+│   ├── tests/test_autopilot.py  # 12 tests
+│   ├── mcp/                     # MCP server and test client
+│   │   ├── mcp_server.py        # MCP Server (stdio transport)
+│   │   └── test_mcp_client.py   # MCP test client
 ├── knowledge_base/              # RAG docs
 ├── .env.example
 └── README.md / README_zh.md
@@ -181,6 +184,7 @@ CREATE TABLE runs (
 | edge-tts | ^6.1.19 | Speech synthesis |
 | Playwright | ^1.50.1 | Google Calendar automation |
 | FAISS (CPU) | - | Vector retrieval |
+| MCP SDK | ^1.26.0 | Model Context Protocol server |
 | jsonschema | ^4.23.0 | Output validation |
 | pytest | ^9.0.2 | Test framework |
 
@@ -234,7 +238,7 @@ npm i
 `Python` 3.10.11
 
 ```bash
-pip install fastapi uvicorn[standard] python-multipart faster-whisper edge-tts opencc-python-reimplemented dateparser playwright python-dotenv openai jsonschema faiss-cpu numpy httpx pytest pytest-asyncio tzdata
+pip install fastapi uvicorn[standard] python-multipart faster-whisper edge-tts opencc-python-reimplemented dateparser playwright python-dotenv openai jsonschema faiss-cpu numpy httpx pytest pytest-asyncio tzdata mcp[cli]
 ```
 
 Install browser runtime (required for Calendar automation):
@@ -290,7 +294,72 @@ cd Backend
 python main.py
 ```
 
+Build the knowledge base index (required for RAG search, only needed once; re-run after updating `knowledge_base/*.md`):
+
+```bash
+curl -X POST http://localhost:8888/ingest
+```
+
 Open: `http://localhost:5173`
+
+---
+
+## MCP Server
+
+The project exposes all core capabilities as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, allowing Claude Desktop, Claude Code, or any MCP-compatible client to call them directly.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `analyze_transcript` | Extract structured data (intent, entities, actions) from a conversation transcript |
+| `search_knowledge_base` | Semantic search over the FAISS-indexed knowledge base |
+| `send_slack_message` | Send a message to Slack via webhook |
+| `send_email` | Send an email via SMTP |
+| `create_linear_ticket` | Create an issue in Linear |
+| `create_calendar_event` | Create a Google Calendar event via Playwright |
+| `draft_reply` | Generate an AI-powered reply draft with citations |
+| `list_runs` | Query autopilot run history |
+
+### Resources
+
+| URI | Content |
+|-----|---------|
+| `autopilot://schema` | The JSON extraction schema |
+| `autopilot://knowledge-base` | List of knowledge base documents |
+
+### Setup for Claude Desktop
+
+Add to `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "voice-autopilot": {
+      "command": "python",
+      "args": ["D:\\Projects\\Voice-Autopilot\\Backend\\mcp\\mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "D:\\Projects\\Voice-Autopilot\\Backend"
+      }
+    }
+  }
+}
+```
+
+### Testing
+
+```bash
+# Interactive inspector
+mcp dev Backend/mcp/mcp_server.py
+
+# Automated test client (10 tests)
+python Backend/mcp/test_mcp_client.py
+
+# Test a specific tool
+python Backend/mcp/test_mcp_client.py search_knowledge_base
+```
+
+Note: first startup may take ~60s while FAISS loads. Subsequent tool calls are instant.
 
 ---
 
@@ -441,6 +510,8 @@ Compared with OAuth-heavy Calendar API integration, this approach is faster to o
 - Calendar automation: `Backend/tools/calendar_agent.py`
 - RAG: `Backend/rag/ingest.py`, `Backend/rag/retrieve.py`
 - Audit logs: `Backend/store/db.py`, `Backend/store/runs.py`
+- MCP Server: `Backend/mcp/mcp_server.py`
+- MCP test client: `Backend/mcp/test_mcp_client.py`
 - Tests: `Backend/tests/test_autopilot.py`
 
 ---

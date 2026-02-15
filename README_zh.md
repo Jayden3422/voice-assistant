@@ -129,7 +129,10 @@ Voice-Autopilot/
 │   ├── tools/                   # speech / calendar_agent / models
 │   ├── business/                # autopilot_schema / calendar_schema
 │   ├── store/                   # SQLite 初始化 + runs CRUD
-│   └── tests/test_autopilot.py  # 12 项测试
+│   ├── tests/test_autopilot.py  # 12 项测试
+│   ├── mcp/                     # MCP 服务端与测试客户端
+│   │   ├── mcp_server.py        # MCP Server（stdio 传输）
+│   │   └── test_mcp_client.py   # MCP 测试客户端
 ├── knowledge_base/              # RAG 文档
 ├── .env.example
 └── README.md / README_zh.md
@@ -180,6 +183,7 @@ CREATE TABLE runs (
 | edge-tts | ^6.1.19 | 语音合成 |
 | Playwright | ^1.50.1 | Google Calendar 自动化 |
 | FAISS (CPU) | - | 向量检索 |
+| MCP SDK | ^1.26.0 | Model Context Protocol 服务端 |
 | jsonschema | ^4.23.0 | 输出校验 |
 | pytest | ^9.0.2 | 测试框架 |
 
@@ -233,7 +237,7 @@ npm i
 `Python` 3.10.11
 
 ```bash
-pip install fastapi uvicorn[standard] python-multipart faster-whisper edge-tts opencc-python-reimplemented dateparser playwright python-dotenv openai jsonschema faiss-cpu numpy httpx pytest pytest-asyncio tzdata
+pip install fastapi uvicorn[standard] python-multipart faster-whisper edge-tts opencc-python-reimplemented dateparser playwright python-dotenv openai jsonschema faiss-cpu numpy httpx pytest pytest-asyncio tzdata mcp[cli]
 ```
 
 安装浏览器（Calendar 自动化需要）：
@@ -289,7 +293,72 @@ cd Backend
 python main.py
 ```
 
+构建知识库索引（RAG 搜索所需，仅需执行一次；更新 `knowledge_base/*.md` 后重新执行）：
+
+```bash
+curl -X POST http://localhost:8888/ingest
+```
+
 访问：`http://localhost:5173`
+
+---
+
+## 🔗 MCP Server
+
+项目将所有核心能力通过 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 协议暴露，Claude Desktop、Claude Code 等 MCP 客户端可直接调用。
+
+### 可用工具
+
+| 工具 | 说明 |
+|------|------|
+| `analyze_transcript` | 从对话中提取结构化数据（意图、实体、动作） |
+| `search_knowledge_base` | 基于 FAISS 的知识库语义搜索 |
+| `send_slack_message` | 通过 Webhook 发送 Slack 消息 |
+| `send_email` | 通过 SMTP 发送邮件 |
+| `create_linear_ticket` | 在 Linear 创建工单 |
+| `create_calendar_event` | 通过 Playwright 创建 Google Calendar 事件 |
+| `draft_reply` | AI 生成带引用的回复草稿 |
+| `list_runs` | 查询 Autopilot 运行历史 |
+
+### 资源
+
+| URI | 内容 |
+|-----|------|
+| `autopilot://schema` | 提取用 JSON Schema |
+| `autopilot://knowledge-base` | 知识库文档列表 |
+
+### Claude Desktop 配置
+
+在 `claude_desktop_config.json`（Windows：`%APPDATA%\Claude\claude_desktop_config.json`）中添加：
+
+```json
+{
+  "mcpServers": {
+    "voice-autopilot": {
+      "command": "python",
+      "args": ["D:\\Projects\\Voice-Autopilot\\Backend\\mcp\\mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "D:\\Projects\\Voice-Autopilot\\Backend"
+      }
+    }
+  }
+}
+```
+
+### 测试
+
+```bash
+# 交互式调试
+mcp dev Backend/mcp/mcp_server.py
+
+# 自动化测试客户端（10 项测试）
+python Backend/mcp/test_mcp_client.py
+
+# 测试单个工具
+python Backend/mcp/test_mcp_client.py search_knowledge_base
+```
+
+注意：首次启动约需 ~60 秒加载 FAISS，后续 tool 调用瞬间完成。
 
 ---
 
@@ -442,6 +511,8 @@ python -m pytest tests/test_autopilot.py -v
 - 日历自动化：`Backend/tools/calendar_agent.py`
 - RAG：`Backend/rag/ingest.py`、`Backend/rag/retrieve.py`
 - 审计日志：`Backend/store/db.py`、`Backend/store/runs.py`
+- MCP Server：`Backend/mcp/mcp_server.py`
+- MCP 测试客户端：`Backend/mcp/test_mcp_client.py`
 - 测试：`Backend/tests/test_autopilot.py`
 
 ---

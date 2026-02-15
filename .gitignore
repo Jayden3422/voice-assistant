@@ -28,5 +28,7 @@ __pycache__/
 chrome-win
 chrome_profile
 
+rag_store
+
 # Private
 .env
